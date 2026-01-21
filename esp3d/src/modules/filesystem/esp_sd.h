@@ -91,11 +91,20 @@ class ESP_SD {
   static bool enableSharedSD();
   static bool disableSharedSD();
   static bool isEnabled() { return _enabled; }
+#if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
+  static void IRAM_ATTR sdCsInterrupt();
+  static void attachCsInterrupt();
+  static void detachCsInterrupt();
+  static bool isPrinterAccessingSD() { return _printer_accessing_sd; }
+#endif  // ESP_SD_CS_SENSE
 #endif  // SD_DEVICE_CONNECTION == ESP_SHARED_SD
  private:
   static bool _started;
 #if SD_DEVICE_CONNECTION == ESP_SHARED_SD
   static bool _enabled;
+#if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
+  static volatile bool _printer_accessing_sd;
+#endif  // ESP_SD_CS_SENSE
 #endif  // SD_DEVICE_CONNECTION == ESP_SHARED_SD
   static uint8_t _state;
   static uint8_t _spi_speed_divider;

@@ -144,6 +144,10 @@ bool ESP_SD::begin() {
   pinMode(ESP_FLAG_SHARED_SD_PIN, OUTPUT);
   digitalWrite(ESP_FLAG_SHARED_SD_PIN, !ESP_FLAG_SHARED_SD_VALUE);
 #endif  // ESP_FLAG_SHARED_SD_PIN
+#if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
+  // Attach interrupt for SS detection
+  ESP_SD::attachCsInterrupt();
+#endif  // ESP_SD_CS_SENSE
 #endif  // SD_DEVICE_CONNECTION  == ESP_SHARED_SD
 #if (ESP_SD_CS_PIN != -1) || (ESP_SD_MISO_PIN != -1) || \
     (ESP_SD_MOSI_PIN != -1) || (ESP_SD_SCK_PIN != -1)
@@ -154,6 +158,12 @@ bool ESP_SD::begin() {
 }
 
 void ESP_SD::end() {
+#if SD_DEVICE_CONNECTION == ESP_SHARED_SD
+#if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
+  // Detach interrupt for SS detection
+  ESP_SD::detachCsInterrupt();
+#endif  // ESP_SD_CS_SENSE
+#endif  // SD_DEVICE_CONNECTION == ESP_SHARED_SD
   _state = ESP_SDCARD_NOT_PRESENT;
   _started = false;
 }

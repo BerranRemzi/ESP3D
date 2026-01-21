@@ -533,6 +533,15 @@
 #define ESP_SD_D1_PIN 4
 #define ESP_SD_D2_PIN 12
 #else
+// Standard shared SD configuration
+#ifndef ESP_SD_CS_PIN
+#define ESP_SD_CS_PIN 5    // D1 - SS output for ESP8266
+#endif  // ESP_SD_CS_PIN
+
+#ifndef ESP_SD_CS_SENSE
+#define ESP_SD_CS_SENSE 4  // D2 - SS input detection from printer
+#endif  // ESP_SD_CS_SENSE
+
 #ifndef ESP_FLAG_SHARED_SD_PIN
 #define ESP_FLAG_SHARED_SD_PIN -1
 #endif  // ESP_PIN_SHARED_SD

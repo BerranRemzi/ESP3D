@@ -31,9 +31,32 @@
 
 #if SD_DEVICE_CONNECTION == ESP_SHARED_SD
 bool ESP_SD::_enabled = false;
+#if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
+volatile bool ESP_SD::_printer_accessing_sd = false;
+#endif  // ESP_SD_CS_SENSE
 #if SD_CARD_TYPE == ESP_FYSETC_WIFI_PRO_SDCARD
 #include <SPI.h>
 #endif  // SD_CARD_TYPE == ESP_FYSETC_WIFI_PRO_SDCARD
+
+#if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
+// Interrupt handler for SS detection on pin 4
+void IRAM_ATTR ESP_SD::sdCsInterrupt() {
+  // When CS falls (goes LOW), printer is accessing the SD card
+  _printer_accessing_sd = (digitalRead(ESP_SD_CS_SENSE) == LOW);
+}
+
+void ESP_SD::attachCsInterrupt() {
+  pinMode(ESP_SD_CS_SENSE, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ESP_SD_CS_SENSE), sdCsInterrupt, CHANGE);
+  esp3d_log("Attached interrupt to SD CS sense pin %d", ESP_SD_CS_SENSE);
+}
+
+void ESP_SD::detachCsInterrupt() {
+  detachInterrupt(digitalPinToInterrupt(ESP_SD_CS_SENSE));
+  esp3d_log("Detached interrupt from SD CS sense pin %d", ESP_SD_CS_SENSE);
+}
+#endif  // ESP_SD_CS_SENSE
+
 bool ESP_SD::enableSharedSD() {
   esp3d_log("Enable Shared SD if possible");
   if (_enabled) {
@@ -41,6 +64,12 @@ bool ESP_SD::enableSharedSD() {
     return false;
   }
 #if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
+  // Check if printer is currently accessing SD card via interrupt flag
+  if (_printer_accessing_sd) {
+    esp3d_log("Printer is accessing SD (detected via interrupt), skip");
+    return false;
+  }
+  // Also do a direct read as a backup check
   bool active_cs = !digitalRead(ESP_SD_CS_SENSE);
   if (active_cs) {
     esp3d_log("SD CS is active, skip");

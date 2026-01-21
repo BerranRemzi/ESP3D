@@ -98,6 +98,10 @@ bool ESP_SD::begin() {
   digitalWrite(ESP_SD_POWER_PIN, ESP_POWER_SD_VALUE);
 #endif  // defined(ESP3D_POWER_SD_PIN)
 #endif  // SD_CARD_TYPE == ESP_FYSETC_WIFI_PRO_SDCARD
+#if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
+  // Attach interrupt for SS detection
+  ESP_SD::attachCsInterrupt();
+#endif  // ESP_SD_CS_SENSE
 #endif  // SD_DEVICE_CONNECTION  == ESP_SHARED_SD
 #if (ESP_SD_CS_PIN != -1) || (ESP_SD_MISO_PIN != -1) || \
     (ESP_SD_MOSI_PIN != -1) || (ESP_SD_SCK_PIN != -1)
@@ -113,6 +117,12 @@ bool ESP_SD::begin() {
 }
 
 void ESP_SD::end() {
+#if SD_DEVICE_CONNECTION == ESP_SHARED_SD
+#if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
+  // Detach interrupt for SS detection
+  ESP_SD::detachCsInterrupt();
+#endif  // ESP_SD_CS_SENSE
+#endif  // SD_DEVICE_CONNECTION == ESP_SHARED_SD
   ESP3D_SD_Card.end();
   _state = ESP_SDCARD_NOT_PRESENT;
   _started = false;
