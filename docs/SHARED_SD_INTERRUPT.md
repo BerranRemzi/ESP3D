@@ -51,11 +51,13 @@ In `myconfig.h` or `configuration.h`:
 - **Fast Response**: Hardware interrupt detects printer access immediately
 - **Low Overhead**: No polling required, minimal CPU usage
 - **Reliable**: Uses CHANGE interrupt to catch both rising and falling edges
-- **Dual Safety**: Combines interrupt flag with direct pin read for maximum reliability
+- **20-Second Timeout**: SD remains blocked for 20 seconds after printer access
+- **User Feedback**: Shows dummy file when SD is blocked by printer
 
 ### Conflict Prevention
 - Checks interrupt flag before enabling SD access
-- Performs backup direct pin read for additional safety
+- Enforces 20-second timeout after printer activity
+- Shows "SD card is used by printer.txt" when blocked
 - Properly manages SPI bus sharing between ESP and printer
 
 ### Automatic Management
@@ -67,34 +69,37 @@ In `myconfig.h` or `configuration.h`:
 
 ### Key Functions
 
-#### `attachCsInterrupt()`
-Sets up the interrupt on the SS sense pin:
-- Configures pin as INPUT_PULLUP
-- Attaches interrupt handler to CHANGE event
-- Logs attachment for debugging
-
 #### `sdCsInterrupt()` (ISR)
 Interrupt Service Routine that:
 - Runs in IRAM for fast execution
 - Updates `_printer_accessing_sd` flag
+- Tracks timestamp (`_last_printer_access_time`) when printer accesses SD
 - Checks if CS is LOW (active) or HIGH (inactive)
+
+#### `isSDBlockedByPrinter()`
+Checks if SD is blocked by printer:
+- Returns `true` if printer is actively using SD
+- Returns `true` if within 20-second timeout after last printer access
+- Returns `false` only after timeout expires
+
+#### `getBlockedTimeRemaining()`
+Returns remaining time (in milliseconds) that SD is blocked:
+- Returns full 20000ms if printer is actively using SD
+- Returns remaining time if within timeout period
+- Returns 0 if SD is available
 
 #### `enableSharedSD()`
 Before taking SD access:
-- **Primary check**: Interrupt flag (real-time state from ISR)
-- **Backup check**: Direct pin read (catches very recent changes before ISR runs)
-- Only enables SD if both checks pass
+- Checks if SD is blocked (via `isSDBlockedByPrinter()`)
+- Logs remaining timeout time for debugging
+- Only enables SD if timeout has expired
 
-The dual-check approach is necessary because:
-1. The interrupt flag reflects the last known state from the ISR
-2. A very recent pin change might not have triggered the ISR yet
-3. The direct read ensures we catch any changes that occurred microseconds before
-4. This prevents race conditions during the critical enable decision
-
-#### `detachCsInterrupt()`
-Cleanup function:
-- Removes interrupt handler
-- Logs detachment for debugging
+#### `ESP_SD::open()`
+When opening root directory ("/"):
+- If SD is blocked by printer, returns dummy file
+- Dummy file named "SD card is used by printer.txt"
+- Shows in file listings when SD is unavailable
+- Prevents access errors and provides user feedback
 
 ## Example Usage
 

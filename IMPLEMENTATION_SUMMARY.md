@@ -2,7 +2,7 @@
 
 ## What Was Implemented
 
-This implementation adds interrupt-based Slave Select (SS) detection for shared SD card access between ESP8266/ESP32 and a 3D printer.
+This implementation adds interrupt-based Slave Select (SS) detection for shared SD card access between ESP8266/ESP32 and a 3D printer, with a 20-second timeout and dummy file display when the SD is blocked.
 
 ## Problem Solved
 
@@ -11,6 +11,8 @@ As requested:
 - **Pin 5 (D1)**: SS output for ESP8266 control
 - **1kΩ resistors**: Support for printer connection through resistors
 - **Interrupt-based detection**: Hardware interrupt monitors printer's SD access
+- **20-second timeout**: SD remains blocked for 20 seconds after printer activity
+- **Dummy file display**: Shows "SD card is used by printer.txt" when SD is blocked
 
 ## Key Features
 
@@ -24,18 +26,31 @@ As requested:
 - **IRAM_ATTR** ISR for fast execution
 - Triggers on **CHANGE** (both rising and falling edges)
 - Updates `_printer_accessing_sd` flag in real-time
+- **Tracks timestamp** when printer accesses SD
 - LOW = printer accessing, HIGH = printer released
 
-### 3. Dual-Check Access Control
-Before enabling SD access, the code performs two checks:
-1. **Primary**: Interrupt flag (real-time state from ISR)
-2. **Backup**: Direct pin read (catches microsecond-level race conditions)
+### 3. 20-Second Timeout Mechanism
+**New methods:**
+- `isSDBlockedByPrinter()` - Checks if blocked (active OR within timeout)
+- `getBlockedTimeRemaining()` - Returns remaining timeout in milliseconds
 
-This prevents conflicts even if the interrupt hasn't fired yet.
+**Behavior:**
+- When printer accesses SD, timestamp is recorded
+- SD remains blocked for 20 seconds after printer releases it
+- Prevents access conflicts during critical printer operations
 
-### 4. Automatic Management
+### 4. Dummy File Display
+**Behavior:**
+- When opening root directory ("/") while SD is blocked
+- Returns dummy file: "SD card is used by printer.txt"
+- Shows in file listings instead of access error
+- Provides user feedback about SD availability
+- Implemented in all SD backends
+
+### 5. Automatic Management
 - Interrupt attached in `ESP_SD::begin()`
 - Interrupt detached in `ESP_SD::end()`
+- Timestamp initialized to 0 on attach/detach
 - Works transparently with all SD implementations
 
 ## Files Modified
@@ -101,13 +116,25 @@ Since this requires physical hardware, suggested tests:
    - Check serial logs for "Attached interrupt to SD CS sense pin 4"
    - Try accessing SD card
 
-2. **Conflict prevention**:
+2. **20-second timeout**:
+   - Trigger printer SD access
+   - Check logs: "SD blocked by printer (remaining: XXXX ms)"
+   - Verify ESP cannot access SD during timeout
+   - Wait 20 seconds, verify access is restored
+
+3. **Dummy file display**:
+   - Access SD via web interface while blocked
+   - Should see "SD card is used by printer.txt" in file listing
+   - File should disappear after timeout expires
+
+4. **Conflict prevention**:
    - Start SD print on printer
    - Try accessing SD from ESP3D web interface
-   - Should see "Printer is accessing SD (detected via interrupt), skip"
+   - Should see timeout blocking access
+   - Should see dummy file in listing
 
-3. **Normal operation**:
-   - When printer is idle
+5. **Normal operation**:
+   - When printer is idle and timeout expired
    - ESP8266 should successfully access SD
    - Should see "Enable Shared SD if possible" and success messages
 
