@@ -293,6 +293,17 @@ ESP_SDFile ESP_SD::open(const char* path, uint8_t mode) {
     esp3d_log_e("%s is invalid path", path);
     return ESP_SDFile();
   }
+  
+#if SD_DEVICE_CONNECTION == ESP_SHARED_SD && defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
+  // If SD is blocked by printer and opening root directory, return dummy file
+  if (strcmp(path, "/") == 0 && mode == ESP_FILE_READ && isSDBlockedByPrinter()) {
+    esp3d_log("SD blocked by printer, returning dummy file");
+    return ESP_SDFile("SD card is used by printer.txt", 
+                      "/SD card is used by printer.txt", 
+                      false, 0);
+  }
+#endif  // SD_DEVICE_CONNECTION == ESP_SHARED_SD
+  
   if (mode != ESP_FILE_READ) {
     // check container exists
     String p = path;

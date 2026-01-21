@@ -33,6 +33,7 @@
 bool ESP_SD::_enabled = false;
 #if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
 volatile bool ESP_SD::_printer_accessing_sd = false;
+volatile uint32_t ESP_SD::_last_printer_access_time = 0;
 #endif  // ESP_SD_CS_SENSE
 #if SD_CARD_TYPE == ESP_FYSETC_WIFI_PRO_SDCARD
 #include <SPI.h>
@@ -47,7 +48,46 @@ void IRAM_ATTR ESP_SD::sdCsInterrupt() {
   // Note: Using digitalRead() here is acceptable for this non-time-critical application.
   // SD access coordination happens at millisecond intervals, not microseconds.
   // Direct port access would make code platform-specific without meaningful benefit.
-  _printer_accessing_sd = (digitalRead(ESP_SD_CS_SENSE) == LOW);
+  bool printer_active = (digitalRead(ESP_SD_CS_SENSE) == LOW);
+  _printer_accessing_sd = printer_active;
+  
+  // Update timestamp when printer accesses SD
+  if (printer_active) {
+    _last_printer_access_time = millis();
+  }
+}
+
+// Check if SD is blocked by printer (active or within 20-second timeout)
+bool ESP_SD::isSDBlockedByPrinter() {
+  if (_printer_accessing_sd) {
+    return true;  // Printer is actively using SD
+  }
+  
+  // Check if within 20-second timeout period
+  if (_last_printer_access_time > 0) {
+    uint32_t elapsed = millis() - _last_printer_access_time;
+    if (elapsed < PRINTER_BUSY_TIMEOUT) {
+      return true;  // Still within timeout period
+    }
+  }
+  
+  return false;
+}
+
+// Get remaining time (in milliseconds) that SD is blocked
+uint32_t ESP_SD::getBlockedTimeRemaining() {
+  if (_printer_accessing_sd) {
+    return PRINTER_BUSY_TIMEOUT;  // Return full timeout if actively accessing
+  }
+  
+  if (_last_printer_access_time > 0) {
+    uint32_t elapsed = millis() - _last_printer_access_time;
+    if (elapsed < PRINTER_BUSY_TIMEOUT) {
+      return PRINTER_BUSY_TIMEOUT - elapsed;
+    }
+  }
+  
+  return 0;  // No blocking
 }
 
 void ESP_SD::attachCsInterrupt() {
@@ -56,11 +96,13 @@ void ESP_SD::attachCsInterrupt() {
   // On ESP32, all GPIO pins support interrupts
   // Pin 4 is guaranteed to support interrupts on both platforms
   attachInterrupt(digitalPinToInterrupt(ESP_SD_CS_SENSE), sdCsInterrupt, CHANGE);
+  _last_printer_access_time = 0;  // Initialize timestamp
   esp3d_log("Attached interrupt to SD CS sense pin %d", ESP_SD_CS_SENSE);
 }
 
 void ESP_SD::detachCsInterrupt() {
   detachInterrupt(digitalPinToInterrupt(ESP_SD_CS_SENSE));
+  _last_printer_access_time = 0;  // Reset timestamp
   esp3d_log("Detached interrupt from SD CS sense pin %d", ESP_SD_CS_SENSE);
 }
 #endif  // ESP_SD_CS_SENSE
@@ -72,16 +114,10 @@ bool ESP_SD::enableSharedSD() {
     return false;
   }
 #if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
-  // Check interrupt flag first - this reflects the real-time state from ISR
-  // The direct pin read below is a backup check in case of very recent changes
-  if (_printer_accessing_sd) {
-    esp3d_log("Printer is accessing SD (detected via interrupt), skip");
-    return false;
-  }
-  // Backup check: Read pin directly in case ISR hasn't run yet after recent change
-  bool active_cs = !digitalRead(ESP_SD_CS_SENSE);
-  if (active_cs) {
-    esp3d_log("SD CS is active (direct read), skip");
+  // Check if SD is blocked by printer (active or within 20-second timeout)
+  if (isSDBlockedByPrinter()) {
+    uint32_t remaining = getBlockedTimeRemaining();
+    esp3d_log("SD blocked by printer (remaining: %d ms), skip", remaining);
     return false;
   }
 #endif  // ESP_SD_CS_SENSE

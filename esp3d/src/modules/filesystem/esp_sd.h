@@ -96,6 +96,8 @@ class ESP_SD {
   static void attachCsInterrupt();
   static void detachCsInterrupt();
   static bool isPrinterAccessingSD() { return _printer_accessing_sd; }
+  static bool isSDBlockedByPrinter();
+  static uint32_t getBlockedTimeRemaining();
 #endif  // ESP_SD_CS_SENSE
 #endif  // SD_DEVICE_CONNECTION == ESP_SHARED_SD
  private:
@@ -104,6 +106,8 @@ class ESP_SD {
   static bool _enabled;
 #if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
   static volatile bool _printer_accessing_sd;
+  static volatile uint32_t _last_printer_access_time;
+  static const uint32_t PRINTER_BUSY_TIMEOUT = 20000; // 20 seconds in milliseconds
 #endif  // ESP_SD_CS_SENSE
 #endif  // SD_DEVICE_CONNECTION == ESP_SHARED_SD
   static uint8_t _state;
