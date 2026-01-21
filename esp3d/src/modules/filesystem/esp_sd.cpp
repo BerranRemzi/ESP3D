@@ -44,11 +44,17 @@ volatile bool ESP_SD::_printer_accessing_sd = false;
 void IRAM_ATTR ESP_SD::sdCsInterrupt() {
   // When CS is LOW, printer is accessing the SD card
   // When CS is HIGH, printer has released the SD card
+  // Note: Using digitalRead() here is acceptable for this non-time-critical application.
+  // SD access coordination happens at millisecond intervals, not microseconds.
+  // Direct port access would make code platform-specific without meaningful benefit.
   _printer_accessing_sd = (digitalRead(ESP_SD_CS_SENSE) == LOW);
 }
 
 void ESP_SD::attachCsInterrupt() {
   pinMode(ESP_SD_CS_SENSE, INPUT_PULLUP);
+  // Note: On ESP8266, all GPIO pins except GPIO16 support interrupts
+  // On ESP32, all GPIO pins support interrupts
+  // Pin 4 is guaranteed to support interrupts on both platforms
   attachInterrupt(digitalPinToInterrupt(ESP_SD_CS_SENSE), sdCsInterrupt, CHANGE);
   esp3d_log("Attached interrupt to SD CS sense pin %d", ESP_SD_CS_SENSE);
 }

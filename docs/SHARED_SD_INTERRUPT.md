@@ -128,8 +128,22 @@ Printer is accessing SD (detected via interrupt), skip
 ## Compatibility
 
 - **ESP8266**: Fully supported with both ESP_SD_NATIVE and ESP_SDFAT2
+  - All GPIO pins except GPIO16 support interrupts
+  - Pin 4 (D2) is confirmed to support interrupts
 - **ESP32**: Fully supported with all SD implementations
+  - All GPIO pins support interrupts
+  - Pin 4 is confirmed to support interrupts
 - **Backwards Compatible**: Works with existing FYSETC WiFi Pro configuration
+
+## Pin Selection Notes
+
+### Recommended Pins
+- **ESP8266**: Use GPIO 4 (D2) for CS sense, GPIO 5 (D1) for CS control
+- **ESP32**: Any GPIO pin can be used, but maintain consistency
+
+### Pins to Avoid
+- **ESP8266 GPIO16**: Does not support interrupts, do not use for CS sense
+- **ESP32 Strapping Pins**: GPIO 0, 2, 5, 12, 15 - avoid if possible for stability
 
 ## Notes
 
