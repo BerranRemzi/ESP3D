@@ -39,9 +39,11 @@ volatile bool ESP_SD::_printer_accessing_sd = false;
 #endif  // SD_CARD_TYPE == ESP_FYSETC_WIFI_PRO_SDCARD
 
 #if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
-// Interrupt handler for SS detection on pin 4
+// Interrupt handler for SS detection
+// Triggers on CHANGE (both rising and falling edges) to track printer's SD access
 void IRAM_ATTR ESP_SD::sdCsInterrupt() {
-  // When CS falls (goes LOW), printer is accessing the SD card
+  // When CS is LOW, printer is accessing the SD card
+  // When CS is HIGH, printer has released the SD card
   _printer_accessing_sd = (digitalRead(ESP_SD_CS_SENSE) == LOW);
 }
 
@@ -64,15 +66,16 @@ bool ESP_SD::enableSharedSD() {
     return false;
   }
 #if defined(ESP_SD_CS_SENSE) && ESP_SD_CS_SENSE != -1
-  // Check if printer is currently accessing SD card via interrupt flag
+  // Check interrupt flag first - this reflects the real-time state from ISR
+  // The direct pin read below is a backup check in case of very recent changes
   if (_printer_accessing_sd) {
     esp3d_log("Printer is accessing SD (detected via interrupt), skip");
     return false;
   }
-  // Also do a direct read as a backup check
+  // Backup check: Read pin directly in case ISR hasn't run yet after recent change
   bool active_cs = !digitalRead(ESP_SD_CS_SENSE);
   if (active_cs) {
-    esp3d_log("SD CS is active, skip");
+    esp3d_log("SD CS is active (direct read), skip");
     return false;
   }
 #endif  // ESP_SD_CS_SENSE
